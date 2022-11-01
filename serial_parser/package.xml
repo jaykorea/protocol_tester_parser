@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package>
+  <name>serial_parser</name>
+  <version>0.0.0</version>
+  <description>serial_parser tester</description>
+
+  <author email="jay.cho@samtel.co.kr">Jay Cho</author>
+
+  <maintainer email="jay.cho@samtel.co.kr">Jay Cho</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>serial</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <run_depend>serial</run_depend>
+  <run_depend>std_msgs</run_depend>
+
+</package>
