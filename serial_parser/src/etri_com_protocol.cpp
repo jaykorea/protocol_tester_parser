@@ -116,11 +116,11 @@ int main (int argc, char** argv){
                 if (data_array.data[3] == true) /*if value is over threshold it activates*/ {
                     // speed - 50%
                     // acceleration - 1x
-                    robot_x_vel = robot_x_vel/2;
-                    robot_acc_x = robot_acc_x/2;
+                    robot_x_vel = robot_x_vel/2.0;
+                    robot_acc_x = robot_acc_x/2.0;
                     ros::param::set("/move_base/TebLocalPlannerROS//max_vel_x", robot_x_vel);
                     ros::param::set("/move_base/TebLocalPlannerROS//max_vel_theta", robot_acc_x);
-                    ROS_INFO("speed -50%, acceleration -1x");
+                    ROS_INFO("speed -50per acceleration -1x");
                 }
                 else if (data_array.data[0] == true) {
                     robot_x_vel = robot_x_vel*1.3;
@@ -129,29 +129,29 @@ int main (int argc, char** argv){
                     ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);
                     // speed + 30%
                     // accelration + 1x
-                    ROS_INFO("speed + 30%, acceleration + 1x");
+                    ROS_INFO("speed + 30per acceleration + 1x");
                 }
                 else if (data_array.data[2] == true && data_array.data[4] == true) {
                     robot_x_vel = 0.0;
-                    robot_acc_x = robot_acc_x/2;
+                    robot_acc_x = robot_acc_x/2.0;
                     ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", robot_x_vel);
                     ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);   
                     // spped - 0
                     // acceleration - 1x
                     cmd_force_pub.publish(force_stop_vel);
                     move_base_force_cancle_pub.publish(empty_goal);
-                    ROS_INFO("speed -> 0, acceleration -1x");
+                    ROS_INFO("speed -> 0  acceleration -1x");
                 }
                 else if (data_array.data[4] == true && data_array.data[6] ==true) {
                     robot_x_vel = 0.0;
-                    robot_acc_x = robot_acc_x/2;
+                    robot_acc_x = robot_acc_x/2.0;
                     ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", robot_x_vel);
                     ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);   
                     // spped - 0
                     // acceleration - 2x
                     cmd_force_pub.publish(force_stop_vel);
                     move_base_force_cancle_pub.publish(empty_goal);
-                    ROS_INFO("speed -> 0 , acceleration -2x");
+                    ROS_INFO("speed -> 0  acceleration -2x");
                 }
             }
                 read_pub.publish(data_array);
