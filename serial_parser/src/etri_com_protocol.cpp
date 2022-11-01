@@ -8,6 +8,8 @@
 #include <std_msgs/Int32MultiArray.h>
 #include <std_msgs/Char.h>
 #include <std_msgs/Empty.h>
+#include "geometry_msgs/Twist.h"
+#include "actionlib_msgs/GoalStatusArray.h"
 
 class ETRI_COMM {
     public:
@@ -32,9 +34,14 @@ class ETRI_COMM {
 int main (int argc, char** argv){
     ros::init(argc, argv, "ETRI_serial_node");
     ros::NodeHandle nh;
-    ros::Publisher read_pub = nh.advertise<std_msgs::Int32MultiArray>("read_pub", 1000);
+    ros::Publisher read_pub = nh.advertise<std_msgs::Int32MultiArray>("read_pub", 100);
+    ros::Publisher cmd_force_pub = nh.advertise<geometry_msgs::Twist>("cmd_vel", 100);
+    ros::Publisher move_base_force_cancle_pub = nh.advertise<actionlib_msgs::GoalID>("move_base/cancel", 100);
     serial::Serial ser;
-
+    actionlib_msgs::GoalID empty_goal;
+    geometry_msgs::Twist force_stop_vel;
+    force_stop_vel.linear.x = 0.0;
+    force_stop_vel.angular.z = 0.0;
     ETRI_COMM ec = ETRI_COMM(&nh);
 
     try
@@ -58,6 +65,7 @@ int main (int argc, char** argv){
     }
 
     ros::Rate loop_rate(5);
+
     while(ros::ok()){
 
         ros::spinOnce();
@@ -68,12 +76,18 @@ int main (int argc, char** argv){
         // else ec.ser_flag = false;
                                          
         if (ser.write("at+qd1?\r\n")) { // <<-in if ser.available()
+
+            //while(ser.available()) {
+
             std::string input_serial = ser.read(ser.available());
             ec.Uart_payload = (char*)malloc(input_serial.length() + 1);
+            
             //memset(ec.Uart_payload, '\0', ec.Uart_PAYLOAD_LEN + 1);
             while (ec.Uart_counter < input_serial.length()+1 ){
+
                 char recChar;
                 recChar = input_serial[ec.Uart_counter];
+
                 if (recChar == ec.delimiter_char)
                 {
                     if(ec.Uart_debugMode)
@@ -88,16 +102,64 @@ int main (int argc, char** argv){
             ec.Uart_counter++;
         }
             ROS_INFO("Parsed data : %s", ec.Uart_payload);
+
         if (ec.Uart_payload >0 && ec.delimiter_flag == true) {
             for (int i=1; i<ec.Uart_counter/2+1; i++) {
                 data_array.data.push_back((ec.Uart_payload[2*i-2]-'0')*(int)10 + (ec.Uart_payload[2*i-1]-'0'));
                 //data_array.data[i] = ec.Uart_payload[i];
             }
-            read_pub.publish(data_array);
+            if (ros::param::has("/move_base/TebLocalPlannerROS/max_vel_x") && ros::param::has("/move_base/TebLocalPlannerROS/max_vel_theta")) { //should consider of nh::hasParam
+                double robot_x_vel;
+                double robot_acc_x;
+                ros::param::get("/move_base/TebLocalPlannerROS/max_vel_x",robot_x_vel);
+                ros::param::get("/move_base/TebLocalPlannerROS/max_vel_theta",robot_acc_x);
+                if (data_array.data[3] == true) /*if value is over threshold it activates*/ {
+                    // speed - 50%
+                    // acceleration - 1x
+                    robot_x_vel = robot_x_vel/2;
+                    robot_acc_x = robot_acc_x/2;
+                    ros::param::set("/move_base/TebLocalPlannerROS//max_vel_x", robot_x_vel);
+                    ros::param::set("/move_base/TebLocalPlannerROS//max_vel_theta", robot_acc_x);
+                    ROS_INFO("speed -50%, acceleration -1x");
+                }
+                else if (data_array.data[0] == true) {
+                    robot_x_vel = robot_x_vel*1.3;
+                    robot_acc_x = robot_acc_x*1.1;
+                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", robot_x_vel);
+                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);
+                    // speed + 30%
+                    // accelration + 1x
+                    ROS_INFO("speed + 30%, acceleration + 1x");
+                }
+                else if (data_array.data[2] == true && data_array.data[4] == true) {
+                    robot_x_vel = 0.0;
+                    robot_acc_x = robot_acc_x/2;
+                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", robot_x_vel);
+                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);   
+                    // spped - 0
+                    // acceleration - 1x
+                    cmd_force_pub.publish(force_stop_vel);
+                    move_base_force_cancle_pub.publish(empty_goal);
+                    ROS_INFO("speed -> 0, acceleration -1x");
+                }
+                else if (data_array.data[4] == true && data_array.data[6] ==true) {
+                    robot_x_vel = 0.0;
+                    robot_acc_x = robot_acc_x/2;
+                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", robot_x_vel);
+                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);   
+                    // spped - 0
+                    // acceleration - 2x
+                    cmd_force_pub.publish(force_stop_vel);
+                    move_base_force_cancle_pub.publish(empty_goal);
+                    ROS_INFO("speed -> 0 , acceleration -2x");
+                }
+            }
+                read_pub.publish(data_array);
         }
             ser.flush();
             free(ec.Uart_payload);
-        }
+        //}
+    }
         loop_rate.sleep();
     }
     return 0;
