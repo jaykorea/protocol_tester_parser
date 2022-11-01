@@ -1,20 +1,3 @@
-/***
- * This example expects the serial port has a loopback on it.
- *
- * Alternatively, you could use an Arduino:
- *
- * <pre>
- *  void setup() {
- *    Serial.begin(<insert your baudrate here>);
- *  }
- *
- *  void loop() {
- *    if (Serial.available()) {
- *      Serial.write(Serial.read());
- *    }
- *  }
- * </pre>
- */
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
@@ -37,6 +20,7 @@ class ETRI_COMM {
 	    bool Uart_debugMode = true;
         const char delimiter_char = '>';
         bool delimiter_flag = false;
+        bool ser_flag =false;
 
     double millis() {
         return ros::Time::now().toNSec();
@@ -79,9 +63,11 @@ int main (int argc, char** argv){
         ros::spinOnce();
         ec.Uart_counter = 0;
         std_msgs::Int32MultiArray data_array;
-        //ser.write("at+qd1?\r\n");
 
-        if(ser.available()) {
+        // if (ser.write("at+qd1?\r\n")) ec.ser_flag =true;
+        // else ec.ser_flag = false;
+                                         
+        if (ser.write("at+qd1?\r\n")) { // <<-in if ser.available()
             std::string input_serial = ser.read(ser.available());
             ec.Uart_payload = (char*)malloc(input_serial.length() + 1);
             //memset(ec.Uart_payload, '\0', ec.Uart_PAYLOAD_LEN + 1);
