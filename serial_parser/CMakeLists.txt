@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(serial_parser)
 
 find_package(catkin REQUIRED COMPONENTS
+  dynamic_reconfigure
   roscpp
   serial
   std_msgs

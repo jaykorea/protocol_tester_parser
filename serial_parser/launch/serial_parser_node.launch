@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="serial_parser" type="serial_parser_node" name="serial_parser_node" output="screen">
+  </node>
+</launch>

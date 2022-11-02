@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string>
 #include <ros/ros.h>
+#include <dynamic_reconfigure/client.h>
+#include <dynamic_reconfigure/Config.h>
+#include <dynamic_reconfigure/DoubleParameter.h>
 #include <serial/serial.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Int32MultiArray.h>
@@ -13,7 +16,12 @@
 
 class ETRI_COMM {
     public:
-        ETRI_COMM(ros::NodeHandle *n)
+        dynamic_reconfigure::ReconfigureRequest srv_req;
+        dynamic_reconfigure::ReconfigureResponse srv_resp;
+        dynamic_reconfigure::DoubleParameter double_param_x_vel;
+        dynamic_reconfigure::DoubleParameter double_param_x_acc;
+        dynamic_reconfigure::Config conf;
+        ETRI_COMM(ros::NodeHandle *nh)
         {
         }
         uint8_t Uart_counter = 0;
@@ -23,6 +31,39 @@ class ETRI_COMM {
         const char delimiter_char = '>';
         bool delimiter_flag = false;
         bool ser_flag =false;
+        double default_robot_vel_x;
+        double default_robot_acc_x;
+        bool param_check;
+
+    void set_param(dynamic_reconfigure::Config conf, double default_robot_x_vel, double default_robot_x_acc, float vel_per, float acc_per) {
+        double_param_x_vel.name = "max_vel_x";
+        double_param_x_vel.value = default_robot_x_vel / vel_per;
+        conf.doubles.push_back(double_param_x_vel);
+
+        double_param_x_acc.name = "acc_lim_x";
+        double_param_x_acc.value = default_robot_x_acc / acc_per;
+        conf.doubles.push_back(double_param_x_acc);
+        srv_req.config = conf;
+
+        ros::service::call("/move_base/TebLocalPlannerROS/set_parameters", srv_req, srv_resp);
+    }
+
+    // void set_max_x_vel(double default_robot_x_vel, float per) {
+    //     double_param_x_vel.name = "max_vel_x";
+    //     double_param_x_vel.value = default_robot_x_vel / per;
+    //     conf.doubles.push_back(double_param_x_vel);
+    //     srv_req.config = conf;
+    //     ros::service::call("/move_base/TebLocalPlannerROS/set_parameters", srv_req, srv_resp);
+    // }
+
+    // void set_max_x_acc(double default_robot_x_acc, float per) {
+        // double_param_x_acc.name = "acc_limit_x";
+        // double_param_x_acc.value = default_robot_x_acc / acc_per;
+        // conf.doubles.push_back(double_param_x_acc);
+        // srv_req.config = conf;
+    //     ros::service::call("/move_base/TebLocalPlannerROS/set_parameters", srv_req, srv_resp);
+    // }
+
 
     double millis() {
         return ros::Time::now().toNSec();
@@ -43,6 +84,8 @@ int main (int argc, char** argv){
     force_stop_vel.linear.x = 0.0;
     force_stop_vel.angular.z = 0.0;
     ETRI_COMM ec = ETRI_COMM(&nh);
+    ec.param_check = true;
+
 
     try
     {
@@ -72,13 +115,20 @@ int main (int argc, char** argv){
         ec.Uart_counter = 0;
         std_msgs::Int32MultiArray data_array;
 
+        if ((ros::param::has("/move_base/TebLocalPlannerROS/max_vel_x") && ros::param::has("/move_base/TebLocalPlannerROS/acc_lim_x")) && ec.param_check) { 
+            if (ros::param::get("/move_base/TebLocalPlannerROS/max_vel_x",ec.default_robot_vel_x)) ROS_INFO("Param checked");
+            if (ros::param::get("/move_base/TebLocalPlannerROS/acc_lim_x",ec.default_robot_acc_x)) ROS_INFO("Param checked");
+            //ROS_INFO("Param checked");
+            ec.param_check = false;
+        }
+
         // if (ser.write("at+qd1?\r\n")) ec.ser_flag =true;
         // else ec.ser_flag = false;
                                          
         if (ser.write("at+qd1?\r\n")) { // <<-in if ser.available()
-
-            //while(ser.available()) {
-
+            //ROS_INFO("serial write checked");  
+            if(ser.available()) {
+            //ROS_INFO("serial available checked");  
             std::string input_serial = ser.read(ser.available());
             ec.Uart_payload = (char*)malloc(input_serial.length() + 1);
             
@@ -100,6 +150,7 @@ int main (int argc, char** argv){
             ec.delimiter_flag = false;
             ec.Uart_payload[ec.Uart_counter] = recChar;    
             ec.Uart_counter++;
+            //ROS_INFO("parser while checked");
         }
             ROS_INFO("Parsed data : %s", ec.Uart_payload);
 
@@ -107,58 +158,65 @@ int main (int argc, char** argv){
             for (int i=1; i<ec.Uart_counter/2+1; i++) {
                 data_array.data.push_back((ec.Uart_payload[2*i-2]-'0')*(int)10 + (ec.Uart_payload[2*i-1]-'0'));
                 //data_array.data[i] = ec.Uart_payload[i];
+                //ROS_INFO("parser pushback checked");
             }
-            if (ros::param::has("/move_base/TebLocalPlannerROS/max_vel_x") && ros::param::has("/move_base/TebLocalPlannerROS/max_vel_theta")) { //should consider of nh::hasParam
-                double robot_x_vel;
-                double robot_acc_x;
-                ros::param::get("/move_base/TebLocalPlannerROS/max_vel_x",robot_x_vel);
-                ros::param::get("/move_base/TebLocalPlannerROS/max_vel_theta",robot_acc_x);
-                if (data_array.data[3] == true) /*if value is over threshold it activates*/ {
+            if (!ec.param_check) { //should consider of nh::hasParam
+            ROS_INFO("serial param checked");
+                // double mod_robot_x_vel;
+                // double mod_robot_acc_x;
+                if (data_array.data[3] >= 50) /*if value is over threshold it activates*/ {
+                    ec.set_param(ec.conf, ec.default_robot_vel_x, ec.default_robot_acc_x, 2.0, 2.0);
+                    // mod_robot_x_vel = ec.default_robot_x_vel/(double)2.0;
+                    // mod_robot_acc_x = ec.default_robot_acc_x/(double)2.0;
+                    // ros::param::set("/move_base/TebLocalPlannerROS//max_vel_x", mod_robot_x_vel);
+                    // ros::param::set("/move_base/TebLocalPlannerROS//max_vel_theta", mod_robot_acc_x);
                     // speed - 50%
                     // acceleration - 1x
-                    robot_x_vel = robot_x_vel/2.0;
-                    robot_acc_x = robot_acc_x/2.0;
-                    ros::param::set("/move_base/TebLocalPlannerROS//max_vel_x", robot_x_vel);
-                    ros::param::set("/move_base/TebLocalPlannerROS//max_vel_theta", robot_acc_x);
                     ROS_INFO("speed -50per acceleration -1x");
                 }
-                else if (data_array.data[0] == true) {
-                    robot_x_vel = robot_x_vel*1.3;
-                    robot_acc_x = robot_acc_x*1.1;
-                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", robot_x_vel);
-                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);
+                else if (data_array.data[0] >= 95) {
+                    ec.set_param(ec.conf,ec.default_robot_vel_x, ec.default_robot_acc_x, 1.3, 1.1);
+                    // mod_robot_x_vel = ec.default_robot_vel_x*1.3;
+                    // mod_robot_acc_x = ec.default_robot_acc_x*1.1;
+                    // ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", mod_robot_x_vel);
+                    // ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", mod_robot_acc_x);
                     // speed + 30%
                     // accelration + 1x
                     ROS_INFO("speed + 30per acceleration + 1x");
                 }
-                else if (data_array.data[2] == true && data_array.data[4] == true) {
-                    robot_x_vel = 0.0;
-                    robot_acc_x = robot_acc_x/2.0;
-                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", robot_x_vel);
-                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);   
+                else if (data_array.data[2] >= 95 && data_array.data[4] >= 95) {
+                    ec.set_param(ec.conf,ec.default_robot_vel_x, ec.default_robot_acc_x, 0.0, 2.0);
+                    // mod_robot_x_vel = ec.default_robot_vel_x/0.0; //should be just 0.0?
+                    // mod_robot_acc_x = ec.default_robot_acc_x/2.0;
+                    // ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", mod_robot_x_vel);
+                    // ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", mod_robot_acc_x);   
                     // spped - 0
                     // acceleration - 1x
                     cmd_force_pub.publish(force_stop_vel);
                     move_base_force_cancle_pub.publish(empty_goal);
                     ROS_INFO("speed -> 0  acceleration -1x");
                 }
-                else if (data_array.data[4] == true && data_array.data[6] ==true) {
-                    robot_x_vel = 0.0;
-                    robot_acc_x = robot_acc_x/2.0;
-                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", robot_x_vel);
-                    ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", robot_acc_x);   
+                else if (data_array.data[4] >= 95 && data_array.data[6] >=95) {
+                    ec.set_param(ec.conf,ec.default_robot_vel_x, ec.default_robot_acc_x, 0.0, 2.0);
+                    // mod_robot_x_vel = ec.default_robot_vel_x/0.0;
+                    // mod_robot_acc_x = ec.default_robot_acc_x/2.0;
+                    // ros::param::set("/move_base/TebLocalPlannerROS/max_vel_x", mod_robot_x_vel);
+                    // ros::param::set("/move_base/TebLocalPlannerROS/max_vel_theta", mod_robot_acc_x);   
                     // spped - 0
                     // acceleration - 2x
                     cmd_force_pub.publish(force_stop_vel);
                     move_base_force_cancle_pub.publish(empty_goal);
                     ROS_INFO("speed -> 0  acceleration -2x");
                 }
+                else {
+                    ec.set_param(ec.conf,ec.default_robot_vel_x, ec.default_robot_acc_x, 1.0, 1.0);
+                }
             }
                 read_pub.publish(data_array);
         }
             ser.flush();
             free(ec.Uart_payload);
-        //}
+        }
     }
         loop_rate.sleep();
     }
