@@ -18,7 +18,8 @@ void loop() {
   data[9]= random(10,99);
   sprintf(send_data, "%d%d%d%d%d%d%d%d%d%c",data[0],data[1],data[2],data[3],data[4],data[5],data[6],data[7],data[8],data[9],'>');
   String send_string="011121314151617121516>";
-  char send_string2[] = "8583126530120235>";
+  char hash_02[] = "0000000000000000>";
+  char hash_05[] = "0001000100020011>";
   if (Serial1.available() > 0 )
   {
     String cmdString = "at+qd1?";
@@ -29,12 +30,13 @@ void loop() {
     if (parsedString.equals(cmdString))
     {
       //Serial2.println(gyro_buf);
-      Serial1.print(send_string2);
+      Serial1.print(hash_05);
     }
   }
-
+  delay(15);
+}
 
 //if(Serial.available()){
 //Serial1.write(Serial.read());  
 //}
-}
+//}
