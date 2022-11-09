@@ -1,0 +1,2 @@
+KERNEL=="ttyUSB[0-9]*", MODE="0777", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0010", SYMLINK+="ETRI"
+KERNEL=="ttyUSB[0-9]*", MODE="0777", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", ATTRS{serial}=="D200NGXW", SYMLINK+="ETRI2"

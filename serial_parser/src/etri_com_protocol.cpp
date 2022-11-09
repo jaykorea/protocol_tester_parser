@@ -46,7 +46,7 @@ public:
 	double DEFAULT_ROBOT_ACC_X = 0.5;
     int hash_1, hash_2, hash_3, hash_4, hash_5 = 0;
     int hash_status = -1;
-    int hash_interval = 1000;
+    int hash_interval = 1500;
     double hash_check = 0.0;
 
 	bool set_param(dynamic_reconfigure::Config conf, double default_robot_x_vel, double default_robot_x_acc, float vel_per, float acc_per) {
@@ -141,7 +141,6 @@ int main(int argc, char** argv) {
 	while (ros::ok()) {
 		if ((ros::Time::now().toSec() - ec.param_update_time) < 1.0) { ec.param_update_check = true; }
 		else { ec.param_update_check = false; ec.param_update_flag = false; }
-        double current_hash_time = ros::Time::now().toNSec();
 
 		ec.Uart_counter = 0;
 		std_msgs::Int32MultiArray data_array;
@@ -247,6 +246,7 @@ int main(int argc, char** argv) {
 						// if(ec.set_param(ec.conf,ec.DEFAULT_ROBOT_VEL_X, ec.DEFAULT_ROBOT_ACC_X, 1.0, 1.0)) ROS_INFO("set default param!");
 						// }
 					}
+                    double current_hash_time = ros::Time::now().toNSec();
                     if ((current_hash_time-ec.hash_check)/1000000.0 >= ec.hash_interval)
                     {
                         // ROS_INFO("%f", (ros::Time::now().toNSec()-ec.hash_check)/1000000.0);
