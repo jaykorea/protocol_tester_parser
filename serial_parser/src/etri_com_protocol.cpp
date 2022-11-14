@@ -17,7 +17,7 @@
 #include "geometry_msgs/Twist.h"
 #include "actionlib_msgs/GoalStatusArray.h"
 
-#define hash_counter_check 5
+#define hash_counter_check 3
 
 class ETRI_COMM {
 	
@@ -279,7 +279,7 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
-	ros::Rate loop_rate(10);
+	ros::Rate loop_rate(5);
 
 	while (ros::ok()) {
 		double current_time = ros::Time::now().toSec();
