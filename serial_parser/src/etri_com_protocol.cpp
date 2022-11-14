@@ -148,7 +148,7 @@ class ETRI_COMM {
 			// double mod_robot_acc_x;
 				if (data_array.data[4] == 0 && (data_array.data[5] == 0 || data_array.data[5] == 3 || data_array.data[5] == 4)) {
 					if (data_array.data[0] == 0 && data_array.data[1] != 0) { // #4 deceleration/rotation
-                                  hash_4++;
+                        hash_4++;
 					}
 					else if (data_array.data[0] == 0 && data_array.data[1] == 0) { // #2 deceleration
 						hash_2++;
@@ -160,14 +160,14 @@ class ETRI_COMM {
 							hash_1++;
 						}
 						else if(data_array.data[0] == 0 && data_array.data[2] == 0){ // #3 acceleration
-                                  hash_3++;
+                            hash_3++;
 						}
 					}
 					else if (data_array.data[5] == 2 && data_array.data[0] == 0 && (data_array.data[3] == 1 && data_array.data[1] != 0)) { //#5 e_brake
-                                  hash_5++;
+                            hash_5++;
 					}
 					else if (data_array.data[0] == 0 && data_array.data[2] == 1) { //#1 normal
-						hash_1++;
+							hash_1++;
 					}
 				}
 			}
@@ -186,19 +186,19 @@ class ETRI_COMM {
                            hash_status = 2;
                       }
                       else if (hash_3 >= hash_counter_check) {
-					if (set_param(default_robot_vel_x, default_robot_acc_x, 1.3, 1.1)) ROS_INFO("speed + 30per acceleration + 1x - hash3");
+						if (set_param(default_robot_vel_x, default_robot_acc_x, 1.3, 1.1)) ROS_INFO("speed + 30per acceleration + 1x - hash3");
                            ROS_INFO("hash_3 : %d", hash_3);
                            hash_status = 3;
                       }
                       else if (hash_4 >= hash_counter_check) {
-   					if (set_param(default_robot_vel_x, default_robot_acc_x, 0.0, 2.0)) ROS_INFO("speed -> 0 acceleration -1x - hash4");
+   						if (set_param(default_robot_vel_x, default_robot_acc_x, 0.0, 2.0)) ROS_INFO("speed -> 0 acceleration -1x - hash4");
                            ROS_INFO("hash_4 : %d", hash_4);
                            hash_status = 4; 
                            cmd_force_pub.publish(force_stop_vel);
-				     move_base_force_cancle_pub.publish(empty_goal);                         
+				     	   move_base_force_cancle_pub.publish(empty_goal);                         
                       }
                       else if (hash_5 >= hash_counter_check) {
- 					if (set_param(default_robot_vel_x, default_robot_acc_x, 0.0, 2.0)) ROS_INFO("speed -> 0 acceleration -2x - hash5");
+ 						if (set_param(default_robot_vel_x, default_robot_acc_x, 0.0, 2.0)) ROS_INFO("speed -> 0 acceleration -2x - hash5");
                            ROS_INFO("hash_5 : %d", hash_5);
                            hash_status = 5; 
                            cmd_force_pub.publish(force_stop_vel);
