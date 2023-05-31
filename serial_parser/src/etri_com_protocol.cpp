@@ -105,8 +105,8 @@ class ETRI_COMM {
         if (acc_per == 0) mod_x_acc = default_robot_x_acc * acc_per;
         else mod_x_acc = default_robot_x_acc * acc_per;
 
-		n->setParam("/velocity_smoother/speed_lim_v", mod_x_vel);
-		n->setParam("/velocity_smoother/accel_lim_v", mod_x_acc);
+		n->setParam("/velocity_smoother_nav/speed_lim_v", mod_x_vel);
+		n->setParam("/velocity_smoother_nav/accel_lim_v", mod_x_acc);
 	}
 
 	void param_updates_cb(const dynamic_reconfigure::Config& config) {
