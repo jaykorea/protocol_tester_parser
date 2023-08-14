@@ -1,5 +1,4 @@
 device_name: "/dev/ttyUSB0"
-window_size: 10
 default_robot_vel_x: 0.75
 default_robot_acc_x: 0.13
 frequency: 5.0
