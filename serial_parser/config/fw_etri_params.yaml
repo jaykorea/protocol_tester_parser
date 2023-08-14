@@ -1,5 +1,6 @@
-device_name: "/dev/ttyUSB0"
-default_robot_vel_x: 0.75
-default_robot_acc_x: 0.13
-frequency: 5.0
-baudrate: 115200
+ETRI_serial_node:
+  device_name: "/dev/ttyUSB0"
+  default_robot_vel_x: 0.75
+  default_robot_acc_x: 0.13
+  frequency: 5.0
+  baudrate: 115200

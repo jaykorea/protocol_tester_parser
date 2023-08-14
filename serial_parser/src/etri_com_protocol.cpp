@@ -89,23 +89,23 @@ class ETRI_COMM {
 		ETRI_COMM(ros::NodeHandle* nh)
 		{
 			n = nh;
-	        if(!n->getParam("device_name", device_name_)) {
+	        if(!n->getParam("ETRI_serial_node/device_name", device_name_)) {
 				ROS_WARN("Could not get value of device_name parameter, using default value.");
 				device_name_ = "/dev/ttyUSB0";
 			}
-			if(!n->getParam("default_robot_vel_x", default_robot_vel_x_)) {
+			if(!n->getParam("ETRI_serial_node/default_robot_vel_x", default_robot_vel_x_)) {
 				ROS_WARN("Could not get value of default_robot_vel_x parameter, using default value.");
 				default_robot_vel_x_ = 0.65;
 			}
-			if(!n->getParam("default_robot_acc_x", default_robot_acc_x_)) {
+			if(!n->getParam("ETRI_serial_node/default_robot_acc_x", default_robot_acc_x_)) {
 				ROS_WARN("Could not get value of default_robot_acc_x parameter, using default value.");
 				default_robot_acc_x_ = 0.13;
 			}
-			if(!n->getParam("frequency", frequency_)) {
+			if(!n->getParam("ETRI_serial_node/frequency", frequency_)) {
 				ROS_WARN("Could not get value of frequency parameter, using default value.");
 				frequency_ = 5.0;
 			}
-			if(!n->getParam("baudrate", baudrate_)) {
+			if(!n->getParam("ETRI_serial_node/baudrate", baudrate_)) {
 				ROS_WARN("Could not get value of baudrate parameter, using default value.");
 				baudrate_ = 115200;
 			}
