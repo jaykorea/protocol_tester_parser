@@ -135,8 +135,6 @@ class ETRI_COMM {
 			prev_s_command = -1;
 			s_data;
 			r_data;
-
-
 		}
 
 	void update_goal_point_cb(const geometry_msgs::PoseStamped::ConstPtr& input_goal) {
@@ -300,10 +298,10 @@ class ETRI_COMM {
     	// Compute the mode for s_data and r_data
     	std::string s_mode = computeMode(s_data);
 		std::string r_mode;
-		if (cmd_array[1].compare("R2")) r_mode = cmd_array[1];
-		else if (cmd_array[1].compare("R3")) r_mode = cmd_array[1];
-		else if (cmd_array[1].compare("R5")) r_mode = cmd_array[1];
-		else if (cmd_array[1].compare("R6")) r_mode = cmd_array[1];
+		if (cmd_array[1].compare("R2") == 0) r_mode = cmd_array[1];
+		else if (cmd_array[1].compare("R3") == 0) r_mode = cmd_array[1];
+		else if (cmd_array[1].compare("R5") == 0) r_mode = cmd_array[1];
+		else if (cmd_array[1].compare("R6") == 0) r_mode = cmd_array[1];
 		else r_mode = computeMode(r_data);
 
     	// Map the mode to the respective integer range
