@@ -109,6 +109,10 @@ class ETRI_COMM {
 				ROS_WARN("Could not get value of baudrate parameter, using default value.");
 				baudrate_ = 115200;
 			}
+            if(!n->getParam("ETRI_serial_node/uart_debug", uart_debug_)) {
+                ROS_WARN("Could not get value of uart_debug parameter, using default value.");
+                uart_debug_ = true;
+            }
 			param_updates = n->subscribe("/velocity_smoother/parameter_updates", 10, &ETRI_COMM::param_updates_cb, this);
 		    ai_status_pub = n->advertise<std_msgs::Int32MultiArray>("/freeway/ai_status", 10);
     	    cmd_force_pub = n->advertise<geometry_msgs::Twist>("/cmd_vel/emer", 10);
@@ -208,7 +212,7 @@ class ETRI_COMM {
 	void parse(const std::string& input_serial) {
 	    // Reset cmd_array by clearing all elements
 	    cmd_array.clear();
-
+        if(uart_debug_) { ROS_INFO_STREAM("input serial:" << input_serial); }
 	    // Find the position of the first delimiter (',')
 	    size_t first_delimiter_pos = input_serial.find(',');
 	    if (first_delimiter_pos == std::string::npos) {
@@ -262,13 +266,13 @@ class ETRI_COMM {
 	    s_data.push_back(cmd_array[0]);
 	    r_data.push_back(cmd_array[1]);
 
-		ROS_INFO_STREAM("cmd_array : " << cmd_array[0] << "," << cmd_array[1]);
+		if(uart_debug_) { ROS_INFO_STREAM("cmd_array : " << cmd_array[0] << "," << cmd_array[1]); }
 
     	// If the data exceeds the window size, remove the oldest data
-    	if (s_data.size() > 10) {
+    	if (s_data.size() > 1) {
     	    s_data.pop_front();
     	}
-    	if (r_data.size() > 6) {
+    	if (r_data.size() > 7) {
     	    r_data.pop_front();
     	}
 
@@ -318,8 +322,8 @@ class ETRI_COMM {
 		s_array.data.push_back(s_command);
 
 		std_msgs::Int32MultiArray combined_array;
-		combined_array.data.insert(combined_array.data.end(), r_array.data.begin(), r_array.data.end());
 		combined_array.data.insert(combined_array.data.end(), s_array.data.begin(), s_array.data.end());
+		combined_array.data.insert(combined_array.data.end(), r_array.data.begin(), r_array.data.end());
 
 		ai_status_pub.publish(combined_array);     
     }
@@ -348,6 +352,7 @@ private:
 	double default_robot_acc_x_;
 	bool param_update_flag;
 	bool param_update_check;
+    bool uart_debug_;
 	double param_update_time;
     int r_command;
 	int prev_r_command;
