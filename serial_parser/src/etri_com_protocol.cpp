@@ -19,6 +19,7 @@
 #include <std_msgs/Char.h>
 #include <std_msgs/Empty.h>
 #include "geometry_msgs/Twist.h"
+#include "geometry_msgs/PoseStamped.h"
 #include "actionlib_msgs/GoalStatusArray.h"
 
 #include <fcntl.h> // for open()
@@ -113,9 +114,16 @@ class ETRI_COMM {
                 ROS_WARN("Could not get value of uart_debug parameter, using default value.");
                 uart_debug_ = true;
             }
+			if(!n->getParam("ETRI_serial_node/goal_point", goal_point_)) {
+                ROS_WARN("Could not get value of goal_point_ parameter, using default value.");
+                goal_point_ = "0.0,0.0,0.0,0.0,0.0,0.0,0.0";
+            }
 			param_updates = n->subscribe("/velocity_smoother/parameter_updates", 10, &ETRI_COMM::param_updates_cb, this);
+			update_goal_point = n->subscribe("/freeway/update_goal_point", 10, &ETRI_COMM::update_goal_point_cb, this);
 		    ai_status_pub = n->advertise<std_msgs::Int32MultiArray>("/freeway/ai_status", 10);
     	    cmd_force_pub = n->advertise<geometry_msgs::Twist>("/cmd_vel/emer", 10);
+			goal_resume_pub = n->advertise<std_msgs::Empty>("/freeway/resume", 10);
+			goal_pub = n->advertise<geometry_msgs::PoseStamped>("/freeway/r_goal", 10);
     	    move_base_force_cancle_pub = n->advertise<std_msgs::Empty>("/freeway/goal_cancel", 10);
 			cmd_array;
     	    param_update_check = false;
@@ -127,7 +135,24 @@ class ETRI_COMM {
 			prev_s_command = -1;
 			s_data;
 			r_data;
+
+
 		}
+
+	void update_goal_point_cb(const geometry_msgs::PoseStamped::ConstPtr& input_goal) {
+		std::ostringstream ss;
+
+    	// Extract and concatenate the values
+    	ss << input_goal->pose.position.x << ","
+    	   << input_goal->pose.position.y << ","
+    	   << input_goal->pose.position.z << ","
+    	   << input_goal->pose.orientation.x << ","
+    	   << input_goal->pose.orientation.y << ","
+    	   << input_goal->pose.orientation.z << ","
+    	   << input_goal->pose.orientation.w;
+
+    	goal_point_ = ss.str();
+	}
 
 	bool set_param(double default_robot_x_vel, double default_robot_x_acc, float vel_per, float acc_per) {
 		dynamic_reconfigure::ReconfigureRequest srv_req;
@@ -253,11 +278,7 @@ class ETRI_COMM {
    void logic_controller() {
         std_msgs::Int32MultiArray r_array;
 		std_msgs::Int32MultiArray s_array;
-        actionlib_msgs::GoalID empty_goal;
-        geometry_msgs::Twist force_stop_vel;
         dynamic_reconfigure::Config conf;
-        force_stop_vel.linear.x = 0.0;
-        force_stop_vel.angular.z = 0.0;
 
     	if (cmd_array.size() != 2) {
     	    ROS_WARN("cmd_array does not contain the required number of elements.");
@@ -269,7 +290,7 @@ class ETRI_COMM {
 		if(uart_debug_) { ROS_INFO_STREAM("cmd_array : " << cmd_array[0] << "," << cmd_array[1]); }
 
     	// If the data exceeds the window size, remove the oldest data
-    	if (s_data.size() > 1) {
+    	if (s_data.size() > 1) { // only takes one
     	    s_data.pop_front();
     	}
     	if (r_data.size() > 7) {
@@ -278,7 +299,12 @@ class ETRI_COMM {
 
     	// Compute the mode for s_data and r_data
     	std::string s_mode = computeMode(s_data);
-    	std::string r_mode = computeMode(r_data);
+		std::string r_mode;
+		if (cmd_array[1].compare("R2")) r_mode = cmd_array[1];
+		else if (cmd_array[1].compare("R3")) r_mode = cmd_array[1];
+		else if (cmd_array[1].compare("R5")) r_mode = cmd_array[1];
+		else if (cmd_array[1].compare("R6")) r_mode = cmd_array[1];
+		else r_mode = computeMode(r_data);
 
     	// Map the mode to the respective integer range
 		int s_command = (s_mode.size() > 1) ? std::stoi(s_mode.substr(1)) : -1;
@@ -292,30 +318,60 @@ class ETRI_COMM {
 
 
 		if (r_command == 1 && (prev_r_command != r_command)) {
-            if (set_param_static(default_robot_vel_x_, default_robot_acc_x_, 1.0, 1.0)) ROS_INFO("Normal drive - set default param! - hash1");
-		  prev_r_command = r_command;
+            //if (set_param_static(default_robot_vel_x_, default_robot_acc_x_, 1.0, 1.0)) ROS_INFO("Normal drive - set default param! -> R-Command 1");
+			std::vector<double> values;
+    		std::istringstream ss(goal_point_);
+    		std::string token;
+		
+    		// Parse the comma-separated string
+    		while (std::getline(ss, token, ',')) {
+    		    values.push_back(std::stod(token));
+    		}
+    		// Check if we have all 7 values
+    		if (values.size() != 7) {
+    		    // Handle the error
+    		    return;
+    		}
+    		// Create a PoseStamped message and populate its fields
+    		geometry_msgs::PoseStamped goal;
+		
+    		goal.header.seq = 0;
+    		goal.header.stamp = ros::Time::now();
+    		goal.header.frame_id = "map";
+		
+    		goal.pose.position.x = values[0];
+    		goal.pose.position.y = values[1];
+    		goal.pose.position.z = values[2];
+    		goal.pose.orientation.x = values[3];
+    		goal.pose.orientation.y = values[4];
+    		goal.pose.orientation.z = values[5];
+    		goal.pose.orientation.w = values[6];
+
+			goal_pub.publish(goal);
+
+		  	prev_r_command = r_command;
         }
 		else if (r_command == 2 && (prev_r_command != r_command)) {
-            if (set_param_static(default_robot_vel_x_, default_robot_acc_x_, 0.5, 0.9)) ROS_INFO("speed -50per acceleration -10per - hash2");
-		  prev_r_command = r_command;
+            if (set_param_static(default_robot_vel_x_, default_robot_acc_x_, 0.5, 0.9)) ROS_INFO("speed -50per acceleration -10per -> R-Command 2");
+		  		prev_r_command = r_command;
         }
 		else if (r_command == 3 && (prev_r_command != r_command)) {
-		if (set_param_static(default_robot_vel_x_, default_robot_acc_x_, 1.3, 1.1)) ROS_INFO("speed +30per acceleration +10per - hash3");
-		prev_r_command = r_command;
+			if (set_param_static(default_robot_vel_x_, default_robot_acc_x_, 1.3, 1.1)) ROS_INFO("speed +30per acceleration +10per -> R-Command 3");
+				prev_r_command = r_command;
         }
-		else if (r_command == 4 && (prev_r_command != r_command)) {
-   		//if (set_param(default_robot_vel_x_, default_robot_acc_x_, 0.0, 2.0)) ROS_INFO("speed -> 0 acceleration -1x - hash4");
-			ROS_INFO("speed -> 0 acceleration -1x - hash4");
+		else if (r_command == 5 && (prev_r_command != r_command)) {
+		    std_msgs::Empty empty_goal;
+        	geometry_msgs::Twist force_stop_vel;
+			ROS_INFO("Robot fully stopped -> R-Command 5");
 			prev_r_command = r_command;
 			move_base_force_cancle_pub.publish(empty_goal);
         	cmd_force_pub.publish(force_stop_vel);                     
         }
-		else if (r_command == 5 && (prev_r_command != r_command)) {
- 		//if (set_param(default_robot_vel_x_, default_robot_acc_x_, 0.0, 2.0)) ROS_INFO("speed -> 0 acceleration -2x - hash5");
-			ROS_INFO("speed -> 0 acceleration -2x - hash5");
+		else if (r_command == 6 && (prev_r_command != r_command)) {
+			std_msgs::Empty empty_msg;
+			ROS_INFO("Goal resume -> R-Command 6");
 			prev_r_command = r_command;
-			move_base_force_cancle_pub.publish(empty_goal); 
-        	cmd_force_pub.publish(force_stop_vel);              
+			goal_resume_pub.publish(empty_msg);
         }
 		
         r_array.data.push_back(r_command);
@@ -343,10 +399,14 @@ class ETRI_COMM {
 private:
 	ros::NodeHandle* n;
 	ros::Subscriber param_updates;
+	ros::Subscriber update_goal_point;
+	ros::Publisher goal_pub;
 	ros::Publisher ai_status_pub;
     ros::Publisher cmd_force_pub;
     ros::Publisher move_base_force_cancle_pub;
+	ros::Publisher goal_resume_pub;
 	std::string device_name_;
+	std::string goal_point_;
 	std::vector<std::string> cmd_array;
 	double default_robot_vel_x_;
 	double default_robot_acc_x_;
