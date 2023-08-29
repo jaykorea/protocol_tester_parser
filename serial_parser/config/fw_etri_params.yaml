@@ -5,3 +5,4 @@ ETRI_serial_node:
   frequency: 5.0
   baudrate: 115200
   uart_debug: true
+  goal_point: "0.0,0.0,0.0,0.0,0.0,0.0,0.0"
