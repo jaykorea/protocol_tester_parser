@@ -6,6 +6,7 @@
 #include <deque>
 #include <algorithm>
 #include <vector>
+#include <boost/bind.hpp>
 #include <ros/ros.h>
 #include <dynamic_reconfigure/client.h>
 #include <dynamic_reconfigure/Config.h>
@@ -118,13 +119,20 @@ class ETRI_COMM {
                 ROS_WARN("Could not get value of goal_point_ parameter, using default value.");
                 goal_point_ = "0.0,0.0,0.0,0.0,0.0,0.0,0.0";
             }
+            
+			if(!n->getParam("ETRI_serial_node/pause_time", pause_time_)) {
+                ROS_WARN("Could not get value of pause_time_ parameter, using default value.");
+                pause_time_ = 4.0;
+            }
+            timer;
 			param_updates = n->subscribe("/velocity_smoother/parameter_updates", 10, &ETRI_COMM::param_updates_cb, this);
 			update_goal_point = n->subscribe("/freeway/update_goal_point", 10, &ETRI_COMM::update_goal_point_cb, this);
 		    ai_status_pub = n->advertise<std_msgs::Int32MultiArray>("/freeway/ai_status", 10);
     	    cmd_force_pub = n->advertise<geometry_msgs::Twist>("/cmd_vel/emer", 10);
 			goal_resume_pub = n->advertise<std_msgs::Empty>("/freeway/resume", 10);
-			goal_pub = n->advertise<geometry_msgs::PoseStamped>("/freeway/r_goal", 10);
-    	    move_base_force_cancle_pub = n->advertise<std_msgs::Empty>("/freeway/goal_cancel", 10);
+			goal_pub = n->advertise<geometry_msgs::PoseStamped>("/freeway/goal", 10);
+    	    move_base_force_cancel_pub = n->advertise<std_msgs::Empty>("/freeway/goal_cancel", 10);
+            move_base_force_pause_pub = n->advertise<std_msgs::Empty>("/freeway/goal_pause", 10);
 			cmd_array;
     	    param_update_check = false;
 			param_update_time = 0.0;
@@ -145,38 +153,38 @@ class ETRI_COMM {
     	   << input_goal->pose.position.y << ","
     	   << input_goal->pose.position.z << ","
     	   << input_goal->pose.orientation.x << ","
-    	   << input_goal->pose.orientation.y << ","
+      	   << input_goal->pose.orientation.y << ","
     	   << input_goal->pose.orientation.z << ","
     	   << input_goal->pose.orientation.w;
 
     	goal_point_ = ss.str();
 	}
 
-	bool set_param(double default_robot_x_vel, double default_robot_x_acc, float vel_per, float acc_per) {
-		dynamic_reconfigure::ReconfigureRequest srv_req;
-		dynamic_reconfigure::ReconfigureResponse srv_resp;
-		dynamic_reconfigure::DoubleParameter double_param_x_vel;
-		dynamic_reconfigure::DoubleParameter double_param_x_acc;
-		dynamic_reconfigure::Config conf;
+    bool set_param(double default_robot_x_vel, double default_robot_x_acc, float vel_per, float acc_per) {
+        dynamic_reconfigure::ReconfigureRequest srv_req;
+        dynamic_reconfigure::ReconfigureResponse srv_resp;
+        dynamic_reconfigure::DoubleParameter double_param_x_vel;
+        dynamic_reconfigure::DoubleParameter double_param_x_acc;
+        dynamic_reconfigure::Config conf;
 
-		double_param_x_vel.name = "speed_lim_v";
+        double_param_x_vel.name = "speed_lim_v";
+        double_param_x_vel.value = default_robot_x_vel * vel_per;
+        conf.doubles.push_back(double_param_x_vel);
 
-        if (vel_per == 0) double_param_x_vel.value = default_robot_x_vel * vel_per;
-        else double_param_x_vel.value = default_robot_x_vel / vel_per;
+        double_param_x_acc.name = "accel_lim_v";
+        double_param_x_acc.value = default_robot_x_acc * acc_per;
+        conf.doubles.push_back(double_param_x_acc);
 
-        ROS_INFO("modified_x_vel : %f", double_param_x_vel.value);
+        srv_req.config = conf;
 
-		conf.doubles.push_back(double_param_x_vel);
-
-		double_param_x_acc.name = "accel_lim_v";
-		double_param_x_acc.value = default_robot_x_acc / acc_per;
-		conf.doubles.push_back(double_param_x_acc);
-		srv_req.config = conf;
-
-		ros::service::call("/move_base/TebLocalPlannerROS/set_parameters", srv_req, srv_resp);
-
-		return true;
-	}
+        if (ros::service::call("/velocity_smoother_nav/set_parameters", srv_req, srv_resp)) {
+            ROS_INFO("Successfully set parameters.");
+            return true;
+        } else {
+            ROS_ERROR("Failed to call service /velocity_smoother_nav/set_parameters");
+            return false;
+        }
+    }
 
 	bool set_param_static(double default_robot_x_vel, double default_robot_x_acc, float vel_per, float acc_per) {
 
@@ -288,28 +296,28 @@ class ETRI_COMM {
 		if(uart_debug_) { ROS_INFO_STREAM("cmd_array : " << cmd_array[0] << "," << cmd_array[1]); }
 
     	// If the data exceeds the window size, remove the oldest data
-    	if (s_data.size() > 1) { // only takes one
+    	if (s_data.size() > 1) { // only takes one, default : 10
     	    s_data.pop_front();
     	}
-    	if (r_data.size() > 7) {
+    	if (r_data.size() > 1) { // only takes one, default : 7
     	    r_data.pop_front();
     	}
 
     	// Compute the mode for s_data and r_data
     	std::string s_mode = computeMode(s_data);
-		std::string r_mode;
-		if (cmd_array[1].compare("R2") == 0) r_mode = cmd_array[1];
-		else if (cmd_array[1].compare("R3") == 0) r_mode = cmd_array[1];
-		else if (cmd_array[1].compare("R5") == 0) r_mode = cmd_array[1];
-		else if (cmd_array[1].compare("R6") == 0) r_mode = cmd_array[1];
-		else r_mode = computeMode(r_data);
+		std::string r_mode = computeMode(r_data);
+        //std::string r_mode;
+		//if (cmd_array[1].compare("R1") == 0) r_mode = cmd_array[1];
+		//else if (cmd_array[1].compare("R2") == 0) r_mode = cmd_array[1];
+		//else if (cmd_array[1].compare("R5") == 0) r_mode = cmd_array[1];
+		//else r_mode = computeMode(r_data);
 
     	// Map the mode to the respective integer range
 		int s_command = (s_mode.size() > 1) ? std::stoi(s_mode.substr(1)) : -1;
 		int r_command = (r_mode.size() > 1) ? std::stoi(r_mode.substr(1)) : -1;
 
-		ROS_INFO_STREAM("s_command: " << s_command);
-		ROS_INFO_STREAM("r_command: " << r_command);
+		if(uart_debug_) ROS_INFO_STREAM("s_command: " << s_command);
+		if(uart_debug_) ROS_INFO_STREAM("r_command: " << r_command);
 
     	// Now, s_command will be in the range 0-10 and r_command will be in the range 0-6.
     	// You can use these values as needed in your function.
@@ -346,15 +354,15 @@ class ETRI_COMM {
     		goal.pose.orientation.w = values[6];
 
 			goal_pub.publish(goal);
-
+            if (set_param(default_robot_vel_x_, default_robot_acc_x_, 1.0, 1.0)) ROS_INFO("speed default,  acceleration default -> R-Command 1");
 		  	prev_r_command = r_command;
         }
 		else if (r_command == 2 && (prev_r_command != r_command)) {
-            if (set_param_static(default_robot_vel_x_, default_robot_acc_x_, 0.5, 0.9)) ROS_INFO("speed -50per acceleration -10per -> R-Command 2");
-		  		prev_r_command = r_command;
+            if (set_param(default_robot_vel_x_, default_robot_acc_x_, 0.6, 1.0)) ROS_INFO("speed -30per acceleration -10per -> R-Command 2");
+		    prev_r_command = r_command;
         }
 		else if (r_command == 3 && (prev_r_command != r_command)) {
-			if (set_param_static(default_robot_vel_x_, default_robot_acc_x_, 1.3, 1.1)) ROS_INFO("speed +30per acceleration +10per -> R-Command 3");
+			if (set_param(default_robot_vel_x_, default_robot_acc_x_, 1.7, 1.0)) ROS_INFO("speed +30per acceleration +10per -> R-Command 3");
 				prev_r_command = r_command;
         }
 		else if (r_command == 5 && (prev_r_command != r_command)) {
@@ -362,16 +370,22 @@ class ETRI_COMM {
         	geometry_msgs::Twist force_stop_vel;
 			ROS_INFO("Robot fully stopped -> R-Command 5");
 			prev_r_command = r_command;
-			move_base_force_cancle_pub.publish(empty_goal);
+			move_base_force_cancel_pub.publish(empty_goal);
         	cmd_force_pub.publish(force_stop_vel);                     
         }
 		else if (r_command == 6 && (prev_r_command != r_command)) {
 			std_msgs::Empty empty_msg;
-			ROS_INFO("Goal resume -> R-Command 6");
-			prev_r_command = r_command;
-			goal_resume_pub.publish(empty_msg);
+
+			move_base_force_pause_pub.publish(empty_msg);
+            ROS_INFO("Goal resume -> R-Command 6");
+            timer = n->createTimer(ros::Duration(pause_time_), boost::bind(&ETRI_COMM::resume_tim_cb, this, _1, goal_resume_pub), true);
+
+            //ros::Duration(pause_time_).sleep(); // sleep for half a second
+			//goal_resume_pub.publish(empty_msg);
+
+            prev_r_command = r_command;
         }
-		
+
         r_array.data.push_back(r_command);
 		s_array.data.push_back(s_command);
 
@@ -380,6 +394,11 @@ class ETRI_COMM {
 		combined_array.data.insert(combined_array.data.end(), r_array.data.begin(), r_array.data.end());
 
 		ai_status_pub.publish(combined_array);     
+    }
+
+    void resume_tim_cb(const ros::TimerEvent&, ros::Publisher& pub) {
+        std_msgs::Empty resume_msg;
+        pub.publish(resume_msg);
     }
 
 	std::string r_device_name() {
@@ -396,12 +415,14 @@ class ETRI_COMM {
 
 private:
 	ros::NodeHandle* n;
+    ros::Timer timer;
 	ros::Subscriber param_updates;
 	ros::Subscriber update_goal_point;
 	ros::Publisher goal_pub;
 	ros::Publisher ai_status_pub;
     ros::Publisher cmd_force_pub;
-    ros::Publisher move_base_force_cancle_pub;
+    ros::Publisher move_base_force_cancel_pub;
+    ros::Publisher move_base_force_pause_pub;
 	ros::Publisher goal_resume_pub;
 	std::string device_name_;
 	std::string goal_point_;
@@ -417,6 +438,7 @@ private:
     int s_command;
 	int prev_s_command;
 	float frequency_;
+    float pause_time_;
 	int baudrate_;
 	// Assuming these are global or member variables
 	std::deque<std::string> s_data;
